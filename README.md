@@ -21,7 +21,7 @@ go build -o load-feishu-wiki-env .
 或通过 `go install`（需已推送到 GitHub 并打好 tag）：
 
 ```bash
-go install github.com/DeepLangAI/load-feishu-wiki-env@latest
+GOPROXY=direct go install github.com/DeepLangAI/load-feishu-wiki-env@latest
 ```
 
 ## 快速开始
