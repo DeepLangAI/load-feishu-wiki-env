@@ -13,12 +13,6 @@
 ## 安装
 
 ```bash
-go install load-feishu-wiki-env@latest
-```
-
-或直接编译：
-
-```bash
 git clone <repo>
 cd load-feishu-wiki-env
 go build -o load-feishu-wiki-env .
