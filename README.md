@@ -107,3 +107,196 @@ API_KEY="sk-abc123"
 ```bash
 go test ./...
 ```
+
+---
+
+## 在 GitHub Actions 中使用
+
+### 整体流程
+
+```
+飞书多维表格（存储生产密钥）
+  → CI 调用 load-feishu-wiki-env 生成 .env 文件      # 从飞书读取所有 key/value
+  → SCP 将 .env 和 docker-compose.yaml 推送到服务器   # 传输配置文件
+  → docker-compose 通过 env_file 将变量注入容器        # 容器启动时加载
+  → Go 应用通过 cleanenv 读取 env tag 字段            # 运行时覆盖 yaml 配置中的敏感值
+```
+
+### 飞书表格结构
+
+表格需包含 `key` 和 `value` 两列，每行是一个环境变量，示例：
+
+| key | value |
+|-----|-------|
+| MONGO_ADDR | mongodb://user:pass@host:27017/dbname |
+| REDIS_USERNAME | default |
+| REDIS_PASSWORD | your-redis-password |
+| SESSION_SECRET | your-session-secret |
+| CRYPTO_SECRET | your-crypto-secret |
+| JUST_ONE_API_TOKEN | sk-xxx |
+| NOTIFY_FEISHU_WEBHOOK | https://open.feishu.cn/open-apis/bot/v2/hook/xxx |
+
+### GitHub Secrets 配置
+
+在仓库的 **Settings → Secrets and variables → Actions** 中添加以下三个 Secret：
+
+| Secret | 说明 | 获取方式 |
+|--------|------|----------|
+| `FEISHU_APP_ID` | 飞书自建应用的 App ID | 飞书开放平台 → 应用详情 → 凭证与基础信息 |
+| `FEISHU_APP_SECRET` | 飞书自建应用的 App Secret | 同上 |
+| `FEISHU_ENV_TABLE_URL` | 多维表格链接（含 table 参数） | 打开目标表格，复制浏览器地址栏 URL |
+
+飞书应用需已开通 `bitable:app:readonly` 权限，并作为协作者加入目标多维表格。
+
+### GitHub Actions workflow 示例
+
+在 deploy job 中，安装工具生成 .env，再通过 SCP/SSH 部署：
+
+```yaml
+deploy:
+  needs: build-and-push
+  if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  runs-on: ubuntu-latest
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: false
+
+    - name: Generate .env from Feishu
+      env:
+        FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+        FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+      run: |
+        go install github.com/DeepLangAI/load-feishu-wiki-env@latest
+        load-feishu-wiki-env \
+          --format dotenv \
+          --output .env \
+          "${{ secrets.FEISHU_ENV_TABLE_URL }}"
+
+    - name: Copy files to server
+      uses: appleboy/scp-action@v1
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        source: "docker-compose.yaml,.env"
+        target: ${{ secrets.DEPLOY_PATH }}
+
+    - name: Deploy
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        script: |
+          cd ${{ secrets.DEPLOY_PATH }}
+          sudo docker compose pull
+          sudo docker compose up -d
+```
+
+`go install` 会将二进制安装到 `$GOPATH/bin`，GitHub Actions 默认已将该目录加入 `$PATH`，可直接调用 `load-feishu-wiki-env`。
+
+### docker-compose 配置
+
+用 `env_file` 指向同目录下的 `.env`：
+
+```yaml
+services:
+  app:
+    image: ghcr.io/your-org/your-app:latest
+    restart: always
+    environment:
+      MODE_ENV: prod
+    env_file: ./.env   # 由 CI 从飞书表格生成，包含所有运行时密钥
+```
+
+多个服务共享同一份 `.env` 时，每个服务都可以声明 `env_file: ./.env`。
+
+### Go 应用集成（cleanenv）
+
+安装依赖：
+
+```bash
+go get github.com/ilyakaznacheev/cleanenv@v1.5.0
+go get github.com/joho/godotenv@v1.5.1
+```
+
+在配置 struct 中，敏感字段同时声明 `yaml` tag 和 `env` tag：
+
+```go
+type System struct {
+    SessionSecret string `yaml:"session_secret" env:"SESSION_SECRET"`
+    CryptoSecret  string `yaml:"crypto_secret"  env:"CRYPTO_SECRET"`
+    EmailWebHook  string `yaml:"email_web_hook"  env:"EMAIL_WEB_HOOK"`
+}
+
+type Mongo struct {
+    Addr   string `yaml:"addr"    env:"MONGO_ADDR"`
+    DbName string `yaml:"db_name"`
+}
+
+type Redis struct {
+    Addrs    []string `yaml:"addrs"`
+    Username string   `yaml:"username" env:"REDIS_USERNAME"`
+    Password string   `yaml:"password" env:"REDIS_PASSWORD"`
+    UseTls   bool     `yaml:"use_tls"`
+}
+```
+
+`Init()` 中的加载顺序：先读 yaml 配置，再用环境变量覆盖敏感字段：
+
+```go
+import (
+    "github.com/ilyakaznacheev/cleanenv"
+    "github.com/joho/godotenv"
+    "gopkg.in/yaml.v3"
+)
+
+func Init() {
+    godotenv.Load(filepath.Join(GetProjectPath(), ".env")) // 加载 .env（文件不存在时静默跳过）
+
+    yaml.Unmarshal(dataBytes, &ConfigData)  // 读取 yaml，填充非敏感配置
+
+    cleanenv.ReadEnv(&ConfigData)           // 用环境变量覆盖带 env tag 的敏感字段
+}
+```
+
+`cleanenv.ReadEnv` 只覆盖带 `env` tag 的字段，yaml 中的非敏感配置不受影响。  
+yaml 配置文件中，敏感字段留空即可：
+
+```yaml
+system:
+  session_secret: ""  # env: SESSION_SECRET
+  crypto_secret: ""   # env: CRYPTO_SECRET
+
+mongo:
+  addr: ""            # env: MONGO_ADDR
+  db_name: "mydb"
+
+redis:
+  addrs: ["redis-host:6379"]
+  username: ""        # env: REDIS_USERNAME
+  password: ""        # env: REDIS_PASSWORD
+```
+
+### 本地开发
+
+在项目根目录创建 `.env` 文件，填入本地开发用的密钥：
+
+```bash
+# .env（本地开发用，不提交到 git）
+MONGO_ADDR=mongodb://localhost:27017/mydb
+REDIS_PASSWORD=
+SESSION_SECRET=local-dev-secret
+```
+
+`godotenv.Load` 在文件不存在时会静默跳过，不影响生产环境。务必将 `.env` 加入 `.gitignore`：
+
+```gitignore
+.env
+```
