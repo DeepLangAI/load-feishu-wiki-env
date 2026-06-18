@@ -14,12 +14,15 @@
 
 **从 GitHub Releases 下载预编译二进制**（推荐）：
 
-前往 [Releases 页面](https://github.com/DeepLangAI/load-feishu-wiki-env/releases/latest) 下载对应平台的压缩包，解压后将二进制放入 `$PATH`：
-
 ```bash
-tar xz load-feishu-wiki-env_*_darwin_arm64.tar.gz
+# macOS Apple Silicon
+curl -L https://github.com/DeepLangAI/load-feishu-wiki-env/releases/download/latest/load-feishu-wiki-env_darwin_arm64.tar.gz | tar xz
 sudo mv load-feishu-wiki-env /usr/local/bin/
 ```
+
+其他平台替换 `darwin_arm64` 为对应平台：`linux_amd64`、`linux_arm64`、`darwin_amd64`、`windows_amd64`（`.zip`）。
+
+也可以前往 [Releases 页面](https://github.com/DeepLangAI/load-feishu-wiki-env/releases/tag/latest) 手动下载。
 
 **通过 `go install`**：
 
