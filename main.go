@@ -20,6 +20,8 @@ import (
 	"os"
 )
 
+var version = "dev"
+
 func main() {
 	var (
 		appID      = flag.String("app-id", os.Getenv("FEISHU_APP_ID"), "飞书 App ID（或 FEISHU_APP_ID 环境变量）")
@@ -32,7 +34,7 @@ func main() {
 		outputFile = flag.String("output", "", "输出到文件（默认 stdout）")
 	)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "用法: %s [flags] <飞书多维表格链接>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "用法: %s %s [flags] <飞书多维表格链接>\n\n", os.Args[0], version)
 		fmt.Fprintln(os.Stderr, "示例:")
 		fmt.Fprintln(os.Stderr, `  eval $(load-feishu-wiki-env "https://xxx.feishu.cn/wiki/XYZ?table=tblABC")`)
 		fmt.Fprintln(os.Stderr, `  load-feishu-wiki-env --format dotenv "https://..." > .env`)
