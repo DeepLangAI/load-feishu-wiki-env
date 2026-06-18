@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          APP=load-feishu-wiki-env
+          TAG=${GITHUB_REF_NAME}
+
+          TARGETS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+
+          mkdir -p dist
+
+          for TARGET in "${TARGETS[@]}"; do
+            OS="${TARGET%/*}"
+            ARCH="${TARGET#*/}"
+            BIN="${APP}_${TAG}_${OS}_${ARCH}"
+            [ "$OS" = "windows" ] && BIN="${BIN}.exe"
+
+            GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 \
+              go build -trimpath -ldflags="-s -w -X main.version=${TAG}" \
+              -o "dist/${BIN}" .
+
+            echo "Built: dist/${BIN}"
+          done
+
+      - name: Create checksums
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
