@@ -141,43 +141,9 @@ func TestFieldStr(t *testing.T) {
 	}
 }
 
-// ---------- quoteDotenvValue ----------
+// ---------- writeDotenv ----------
 
-func TestQuoteDotenvValue(t *testing.T) {
-	cases := []struct {
-		name    string
-		key     string
-		value   string
-		want    string
-		wantErr bool
-	}{
-		{"plain value", "K", "hello", `"hello"`, false},
-		{"empty value", "K", "", `""`, false},
-		{"backslash escaped", "K", `a\b`, `"a\\b"`, false},
-		{"double quote escaped", "K", `say "hi"`, `"say \"hi\""`, false},
-		{"both escapes", "K", `a\"b`, `"a\\\"b"`, false},
-		{"newline rejected", "K", "line1\nline2", "", true},
-		{"carriage return rejected", "K", "a\rb", "", true},
-	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := quoteDotenvValue(tc.key, tc.value)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tc.want {
-				t.Errorf("got %s, want %s", got, tc.want)
-			}
-		})
-	}
-}
 
 // ---------- withRetry ----------
 
@@ -360,27 +326,42 @@ func TestWriteExport(t *testing.T) {
 		{
 			name:    "single record",
 			records: records("FOO", "bar"),
-			want:    "export FOO=\"bar\"\n",
+			want:    "export FOO=$'bar'\n",
 		},
 		{
 			name:    "value with spaces and special chars",
 			records: records("DB_URL", "postgres://u:p@host/db"),
-			want:    "export DB_URL=\"postgres://u:p@host/db\"\n",
+			want:    "export DB_URL=$'postgres://u:p@host/db'\n",
 		},
 		{
 			name:    "empty key skipped",
 			records: records("", "ignored", "K", "v"),
-			want:    "export K=\"v\"\n",
+			want:    "export K=$'v'\n",
 		},
 		{
 			name:    "multiple records",
 			records: records("A", "1", "B", "2"),
-			want:    "export A=\"1\"\nexport B=\"2\"\n",
+			want:    "export A=$'1'\nexport B=$'2'\n",
 		},
 		{
 			name:    "empty records",
 			records: nil,
 			want:    "",
+		},
+		{
+			name:    "newline in value",
+			records: records("K", "line1\nline2"),
+			want:    "export K=$'line1\\nline2'\n",
+		},
+		{
+			name:    "single quote escaped",
+			records: records("K", "it's"),
+			want:    `export K=$'it\'s'` + "\n",
+		},
+		{
+			name:    "backslash escaped",
+			records: records("K", `a\b`),
+			want:    `export K=$'a\\b'` + "\n",
 		},
 	}
 
@@ -423,9 +404,9 @@ func TestWriteDotenv(t *testing.T) {
 			want:    "A=\"1\"\nB=\"2\"\n",
 		},
 		{
-			name:    "newline in value returns error",
+			name:    "newline in value supported",
 			records: records("K", "line1\nline2"),
-			wantErr: true,
+			want:    "K=\"line1\\nline2\"\n",
 		},
 	}
 
