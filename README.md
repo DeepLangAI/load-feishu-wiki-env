@@ -12,16 +12,28 @@
 
 ## 安装
 
+**从 GitHub Releases 下载预编译二进制**（推荐）：
+
 ```bash
-git clone <repo>
-cd load-feishu-wiki-env
-go build -o load-feishu-wiki-env .
+# macOS Apple Silicon
+curl -L https://github.com/DeepLangAI/load-feishu-wiki-env/releases/latest/download/load-feishu-wiki-env_latest_darwin_arm64.tar.gz | tar xz
+sudo mv load-feishu-wiki-env /usr/local/bin/
 ```
 
-或通过 `go install`（需已推送到 GitHub 并打好 tag）：
+其他平台从 [Releases 页面](https://github.com/DeepLangAI/load-feishu-wiki-env/releases) 下载对应压缩包，解压后放入 `$PATH` 即可。
+
+**通过 `go install`**：
 
 ```bash
 GOPROXY=direct go install github.com/DeepLangAI/load-feishu-wiki-env@latest
+```
+
+**从源码编译**：
+
+```bash
+git clone https://github.com/DeepLangAI/load-feishu-wiki-env.git
+cd load-feishu-wiki-env
+go build -o load-feishu-wiki-env .
 ```
 
 ## 快速开始
@@ -75,18 +87,18 @@ URL 中的 `table` / `tableId` 和 `view` / `viewId` 参数均可识别。
 
 ## 输出格式说明
 
-**export**（默认）：可直接 `eval` 注入当前 shell
+**export**（默认）：使用 `$'...'` 语法，可直接 `eval` 注入当前 shell，正确支持含换行符的值（如证书、SSH key）
 
 ```bash
-export DATABASE_URL="postgres://user:pass@host/db"
-export API_KEY="sk-abc123"
+export DATABASE_URL=$'postgres://user:pass@host/db'
+export PRIVATE_KEY=$'-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----'
 ```
 
-**dotenv**：兼容 docker compose `env_file` 和大多数 dotenv 库；值中的 `\` 和 `"` 自动转义，不支持多行值
+**dotenv**：兼容 docker compose `env_file` 和大多数 dotenv 库；`\`、`"` 自动转义，换行符以 `\n` 转义存储，支持多行值
 
 ```
 DATABASE_URL="postgres://user:pass@host/db"
-API_KEY="sk-abc123"
+PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
 ```
 
 **json**：输出缩进 JSON 对象，方便程序读取或管道处理

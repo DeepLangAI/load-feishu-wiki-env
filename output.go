@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 func writeExport(out io.Writer, records []map[string]any, keyField, valueField string) {
@@ -13,8 +14,36 @@ func writeExport(out io.Writer, records []map[string]any, keyField, valueField s
 		if k == "" {
 			continue
 		}
-		fmt.Fprintf(out, "export %s=%q\n", k, v)
+		fmt.Fprintf(out, "export %s=$'%s'\n", k, shellEscape(v))
 	}
+}
+
+// shellEscape encodes s for use inside $'...' — the only format that
+// correctly round-trips multi-line values through eval.
+func shellEscape(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch c {
+		case '\'':
+			b.WriteString(`\'`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			if c < 0x20 || c == 0x7f {
+				fmt.Fprintf(&b, `\x%02x`, c)
+			} else {
+				b.WriteByte(c)
+			}
+		}
+	}
+	return b.String()
 }
 
 func writeDotenv(out io.Writer, records []map[string]any, keyField, valueField string) error {
@@ -24,11 +53,7 @@ func writeDotenv(out io.Writer, records []map[string]any, keyField, valueField s
 		if k == "" {
 			continue
 		}
-		quoted, err := quoteDotenvValue(k, v)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "%s=%s\n", k, quoted)
+		fmt.Fprintf(out, "%s=%q\n", k, v)
 	}
 	return nil
 }
