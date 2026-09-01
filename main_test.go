@@ -143,8 +143,6 @@ func TestFieldStr(t *testing.T) {
 
 // ---------- writeDotenv ----------
 
-
-
 // ---------- withRetry ----------
 
 func TestWithRetry(t *testing.T) {
@@ -203,8 +201,8 @@ func TestGetTenantAccessToken(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]any{
-				"code":               0,
-				"msg":                "ok",
+				"code":                0,
+				"msg":                 "ok",
 				"tenant_access_token": "tok123",
 			})
 		}))
@@ -386,27 +384,47 @@ func TestWriteDotenv(t *testing.T) {
 		{
 			name:    "plain value",
 			records: records("FOO", "bar"),
-			want:    "FOO=\"bar\"\n",
+			want:    "FOO='bar'\n",
 		},
 		{
-			name:    "backslash and quote escaped",
+			name:    "dollar sign kept literal",
+			records: records("K", "pa$word"),
+			want:    "K='pa$word'\n",
+		},
+		{
+			name:    "backslash and double quote kept as is",
 			records: records("K", `a\"b`),
-			want:    "K=\"a\\\\\\\"b\"\n",
+			want:    "K='a\\\"b'\n",
 		},
 		{
 			name:    "empty key skipped",
 			records: records("", "skip", "K", "v"),
-			want:    "K=\"v\"\n",
+			want:    "K='v'\n",
 		},
 		{
 			name:    "multiple records",
 			records: records("A", "1", "B", "2"),
-			want:    "A=\"1\"\nB=\"2\"\n",
+			want:    "A='1'\nB='2'\n",
 		},
 		{
 			name:    "newline in value supported",
 			records: records("K", "line1\nline2"),
-			want:    "K=\"line1\\nline2\"\n",
+			want:    "K='line1\nline2'\n",
+		},
+		{
+			name:    "single quote falls back to double quotes",
+			records: records("K", "it's"),
+			want:    "K=\"it's\"\n",
+		},
+		{
+			name:    "carriage return falls back to double quotes",
+			records: records("K", "a\rb"),
+			want:    "K=\"a\\rb\"\n",
+		},
+		{
+			name:    "single quote together with dollar sign is rejected",
+			records: records("K", "it's $5"),
+			wantErr: true,
 		},
 	}
 
