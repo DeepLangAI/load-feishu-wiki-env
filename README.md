@@ -136,12 +136,18 @@ export DATABASE_URL=$'postgres://user:pass@host/db'
 export PRIVATE_KEY=$'-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----'
 ```
 
-**`dotenv`** — compatible with `docker compose env_file` and most dotenv libraries:
+**`dotenv`** — compatible with `docker compose env_file` and most dotenv libraries. Values are single-quoted, the one form every reader hands back verbatim, so a `$` in a password is never mistaken for a variable reference:
 
 ```
-DATABASE_URL="postgres://user:pass@host/db"
-PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
+DATABASE_URL='postgres://user:pa$word@host/db'
+PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----
+MIIE...
+-----END RSA PRIVATE KEY-----'
 ```
+
+A value containing a single quote (or a carriage return) falls back to double quotes with `\` and `"` escaped. A value containing **both** a single quote and a `$` cannot be expressed safely — the escapes for a literal `$` inside double quotes disagree across readers — so the command fails instead; use `export` or `json` for that value.
+
+Known limitation: python-dotenv expands `${NAME}` even inside single quotes, so a value containing a literal `${...}` cannot round-trip through that library.
 
 **`json`** — indented JSON object for programmatic use:
 

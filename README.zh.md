@@ -134,12 +134,18 @@ export DATABASE_URL=$'postgres://user:pass@host/db'
 export PRIVATE_KEY=$'-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----'
 ```
 
-**`dotenv`** — 兼容 `docker compose env_file` 和主流 dotenv 库，`\`、`"` 自动转义：
+**`dotenv`** — 兼容 `docker compose env_file` 和主流 dotenv 库。值用单引号包裹，这是各家解析器唯一都原样读回的写法，密码里的 `$` 不会被当成变量引用：
 
 ```
-DATABASE_URL="postgres://user:pass@host/db"
-PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
+DATABASE_URL='postgres://user:pa$word@host/db'
+PRIVATE_KEY='-----BEGIN RSA PRIVATE KEY-----
+MIIE...
+-----END RSA PRIVATE KEY-----'
 ```
+
+值里含单引号（或回车符）时退回双引号，`\`、`"` 自动转义。值里**同时**含单引号和 `$` 则无法安全表达——双引号里表示字面 `$` 的转义写法各家解析器互不兼容——此时命令直接报错，这个值请改用 `export` 或 `json` 格式。
+
+已知限制：python-dotenv 即使在单引号里也会展开 `${NAME}`，值里含字面 `${...}` 时过不了这个库。
 
 **`json`** — 缩进 JSON 对象，便于程序读取或管道处理：
 
